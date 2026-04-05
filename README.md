@@ -108,6 +108,35 @@ err := postgres.Start()
 err := postgres.Stop()
 ```
 
+If you want a reusable starting point for local macOS development and FreeBSD 13
+deployments, use the `preset` helper package:
+
+```go
+import (
+	"time"
+
+	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	"github.com/fergusstrange/embedded-postgres/preset"
+)
+
+config := preset.LocalDevelopment("myapp", preset.Options{
+	Version:      embeddedpostgres.V18,
+	Port:         5433,
+	StartTimeout: 30 * time.Second,
+	// Optional on FreeBSD when you pre-install the binary tree yourself.
+	// BinariesPath: "/opt/embedded-postgres",
+})
+
+postgres := embeddedpostgres.NewDatabase(config)
+err := postgres.Start()
+defer postgres.Stop()
+```
+
+On FreeBSD this preset defaults to the `freebsd13` artifact line and uses
+`/var/tmp/<app>/embedded-postgres/runtime` plus
+`/var/db/<app>/embedded-postgres/data`. Override `Platform("freebsd14")` or the
+paths if your host layout differs.
+
 It should be noted that if `postgres.Stop()` is not called then the child Postgres process will not be released and the
 caller will block.
 
