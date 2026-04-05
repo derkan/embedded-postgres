@@ -42,8 +42,12 @@ func defaultInitDatabase(binaryExtractLocation, runtimePath, pgDataDir, username
 		args = append(args, fmt.Sprintf("--encoding=%s", encoding))
 	}
 
+	if err := ensureFreeBSDRuntimeUser(binaryExtractLocation, runtimePath, pgDataDir); err != nil {
+		return err
+	}
+
 	postgresInitDBBinary := filepath.Join(binaryExtractLocation, "bin/initdb")
-	postgresInitDBProcess := exec.Command(postgresInitDBBinary, args...)
+	postgresInitDBProcess := wrapCommandForRuntimeUser(exec.Command(postgresInitDBBinary, args...))
 	postgresInitDBProcess.Stderr = logger
 	postgresInitDBProcess.Stdout = logger
 

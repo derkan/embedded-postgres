@@ -16,6 +16,11 @@ func defaultVersionStrategy(config Config, goos, arch string, linuxMachineName f
 		goos := goos
 		arch := arch
 
+		if goos == "freebsd" && arch == "amd64" {
+			// The current embedded FreeBSD artifact line is published as freebsd13-amd64.
+			goos = "freebsd13"
+		}
+
 		if goos == "linux" {
 			// the zonkyio/embedded-postgres-binaries project produces
 			// arm binaries with the following name schema:

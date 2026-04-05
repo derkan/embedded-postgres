@@ -210,10 +210,14 @@ func encodeOptions(port uint32, parameters map[string]string) string {
 }
 
 func startPostgres(ep *EmbeddedPostgres) error {
+	if err := ensureFreeBSDRuntimeUser(ep.config.binariesPath, ep.config.runtimePath, ep.config.dataPath); err != nil {
+		return err
+	}
+
 	postgresBinary := filepath.Join(ep.config.binariesPath, "bin/pg_ctl")
-	postgresProcess := exec.Command(postgresBinary, "start", "-w",
+	postgresProcess := wrapCommandForRuntimeUser(exec.Command(postgresBinary, "start", "-w",
 		"-D", ep.config.dataPath,
-		"-o", encodeOptions(ep.config.port, ep.config.startParameters))
+		"-o", encodeOptions(ep.config.port, ep.config.startParameters)))
 	postgresProcess.Stdout = ep.syncedLogger.file
 	postgresProcess.Stderr = ep.syncedLogger.file
 
@@ -229,8 +233,8 @@ func startPostgres(ep *EmbeddedPostgres) error {
 
 func stopPostgres(ep *EmbeddedPostgres) error {
 	postgresBinary := filepath.Join(ep.config.binariesPath, "bin/pg_ctl")
-	postgresProcess := exec.Command(postgresBinary, "stop", "-w",
-		"-D", ep.config.dataPath)
+	postgresProcess := wrapCommandForRuntimeUser(exec.Command(postgresBinary, "stop", "-w",
+		"-D", ep.config.dataPath))
 	postgresProcess.Stderr = ep.syncedLogger.file
 	postgresProcess.Stdout = ep.syncedLogger.file
 

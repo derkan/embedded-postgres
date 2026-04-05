@@ -16,7 +16,7 @@ import (
 )
 
 func Test_GooseMigrations(t *testing.T) {
-	database := embeddedpostgres.NewDatabase()
+	database := newExampleDatabase()
 	if err := database.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -45,8 +45,8 @@ func Test_ZapioLogger(t *testing.T) {
 
 	w := &zapio.Writer{Log: logger}
 
-	database := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
-		Logger(w))
+	config := exampleDatabaseConfig().Logger(w)
+	database := embeddedpostgres.NewDatabase(config)
 	if err := database.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func Test_ZapioLogger(t *testing.T) {
 }
 
 func Test_Sqlx_SelectOne(t *testing.T) {
-	database := embeddedpostgres.NewDatabase()
+	database := newExampleDatabase()
 	if err := database.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func Test_Sqlx_SelectOne(t *testing.T) {
 }
 
 func Test_ManyTestsAgainstOneDatabase(t *testing.T) {
-	database := embeddedpostgres.NewDatabase()
+	database := newExampleDatabase()
 	if err := database.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func Test_ManyTestsAgainstOneDatabase(t *testing.T) {
 }
 
 func Test_SimpleHttpWebApp(t *testing.T) {
-	database := embeddedpostgres.NewDatabase()
+	database := newExampleDatabase()
 	if err := database.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -189,6 +189,6 @@ func Test_SimpleHttpWebApp(t *testing.T) {
 }
 
 func connect() (*sqlx.DB, error) {
-	db, err := sqlx.Connect("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable")
+	db, err := sqlx.Connect("postgres", exampleConnectionString())
 	return db, err
 }
