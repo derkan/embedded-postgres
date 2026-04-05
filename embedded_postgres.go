@@ -71,8 +71,10 @@ func (ep *EmbeddedPostgres) Start() error {
 		return ErrServerAlreadyStarted
 	}
 
-	if err := ensurePortAvailable(ep.config.port); err != nil {
-		return err
+	if !ep.config.useUnixSocket {
+		if err := ensurePortAvailable(ep.config.port); err != nil {
+			return err
+		}
 	}
 
 	logger, err := newSyncedLogger("", ep.config.logger)
@@ -127,7 +129,12 @@ func (ep *EmbeddedPostgres) Start() error {
 	ep.started = true
 
 	if !reuseData {
-		if err := ep.createDatabase(ep.config.port, ep.config.username, ep.config.password, ep.config.database); err != nil {
+		host := "localhost"
+		if ep.config.useUnixSocket {
+			host = ep.config.unixSocketDirectory
+		}
+
+		if err := ep.createDatabase(host, ep.config.port, ep.config.username, ep.config.password, ep.config.database); err != nil {
 			if stopErr := stopPostgres(ep); stopErr != nil {
 				return fmt.Errorf("unable to stop database caused by error %s", err)
 			}
@@ -165,6 +172,10 @@ func (ep *EmbeddedPostgres) downloadAndExtractBinary(cacheExists bool, cacheLoca
 		}
 	}
 	return nil
+}
+
+func (ep *EmbeddedPostgres) GetConnectionURL() string {
+	return ep.config.GetConnectionURL()
 }
 
 func (ep *EmbeddedPostgres) cleanDataDirectoryAndInit() error {
@@ -212,6 +223,15 @@ func encodeOptions(port uint32, parameters map[string]string) string {
 func startPostgres(ep *EmbeddedPostgres) error {
 	if err := ensureFreeBSDRuntimeUser(ep.config.binariesPath, ep.config.runtimePath, ep.config.dataPath); err != nil {
 		return err
+	}
+
+	if ep.config.startParameters == nil {
+		ep.config.startParameters = make(map[string]string)
+	}
+
+	if ep.config.useUnixSocket {
+		ep.config.startParameters["listen_addresses"] = ""
+		ep.config.startParameters["unix_socket_directories"] = ep.config.unixSocketDirectory
 	}
 
 	postgresBinary := filepath.Join(ep.config.binariesPath, "bin/pg_ctl")
