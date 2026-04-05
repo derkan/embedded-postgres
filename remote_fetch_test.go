@@ -42,6 +42,38 @@ func Test_defaultRemoteFetchStrategy_ErrorWhenHttpStatusNot200(t *testing.T) {
 	assert.EqualError(t, err, "no version found matching 1.2.3")
 }
 
+func Test_defaultRemoteFetchStrategy_UsesConfiguredPlatformOverride(t *testing.T) {
+	requests := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.RequestURI)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	versionStrategy := defaultVersionStrategy(
+		DefaultConfig().
+			Version(PostgresVersion("18.3.0")).
+			Platform("freebsd14"),
+		"freebsd",
+		"amd64",
+		linuxMachineName,
+		func() bool {
+			return false
+		},
+	)
+
+	remoteFetchStrategy := defaultRemoteFetchStrategy(server.URL+"/maven2", versionStrategy, testCacheLocator())
+
+	err := remoteFetchStrategy()
+
+	require.EqualError(t, err, "no version found matching 18.3.0")
+	require.NotEmpty(t, requests)
+	assert.Equal(t,
+		"/maven2/io/zonky/test/postgres/embedded-postgres-binaries-freebsd14-amd64/18.3.0/embedded-postgres-binaries-freebsd14-amd64-18.3.0.jar",
+		requests[0],
+	)
+}
+
 func Test_defaultRemoteFetchStrategy_ErrorWhenBodyReadIssue(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "1")

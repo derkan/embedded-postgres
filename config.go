@@ -10,6 +10,7 @@ import (
 // Config maintains the runtime configuration for the Postgres process to be created.
 type Config struct {
 	version             PostgresVersion
+	platform            string
 	port                uint32
 	database            string
 	username            string
@@ -50,6 +51,13 @@ func DefaultConfig() Config {
 // Version will set the Postgres binary version.
 func (c Config) Version(version PostgresVersion) Config {
 	c.version = version
+	return c
+}
+
+// Platform sets the artifact platform line used to resolve postgres binaries.
+// For example: "freebsd13", "freebsd14" or "alpine".
+func (c Config) Platform(platform string) Config {
+	c.platform = platform
 	return c
 }
 

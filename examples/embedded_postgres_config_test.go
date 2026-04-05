@@ -14,6 +14,9 @@ func exampleDatabaseConfig() embeddedpostgres.Config {
 	if version := os.Getenv("EMBEDDED_POSTGRES_VERSION"); version != "" {
 		config = config.Version(embeddedpostgres.PostgresVersion(version))
 	}
+	if platform := os.Getenv("EMBEDDED_POSTGRES_PLATFORM"); platform != "" {
+		config = config.Platform(platform)
+	}
 	if binariesPath := os.Getenv("EMBEDDED_POSTGRES_BINARIES_PATH"); binariesPath != "" {
 		config = config.BinariesPath(binariesPath)
 	}

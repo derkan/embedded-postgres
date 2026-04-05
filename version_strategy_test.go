@@ -142,6 +142,40 @@ func Test_DefaultVersionStrategy_Linux_Alpine(t *testing.T) {
 	assert.Equal(t, V18, postgresVersion)
 }
 
+func Test_DefaultVersionStrategy_FreeBSD_PlatformOverride(t *testing.T) {
+	operatingSystem, architecture, postgresVersion := defaultVersionStrategy(
+		DefaultConfig().Platform("freebsd14"),
+		"freebsd",
+		"amd64",
+		linuxMachineName,
+		func() bool {
+			return false
+		},
+	)()
+
+	assert.Equal(t, "freebsd14", operatingSystem)
+	assert.Equal(t, "amd64", architecture)
+	assert.Equal(t, V18, postgresVersion)
+}
+
+func Test_DefaultVersionStrategy_Alpine_PlatformOverride(t *testing.T) {
+	operatingSystem, architecture, postgresVersion := defaultVersionStrategy(
+		DefaultConfig().Platform("alpine"),
+		"linux",
+		"arm64",
+		func() string {
+			return ""
+		},
+		func() bool {
+			return false
+		},
+	)()
+
+	assert.Equal(t, "alpine", operatingSystem)
+	assert.Equal(t, "arm64v8", architecture)
+	assert.Equal(t, V18, postgresVersion)
+}
+
 func Test_DefaultVersionStrategy_shouldUseAlpineLinuxBuild(t *testing.T) {
 	assert.NotPanics(t, func() {
 		shouldUseAlpineLinuxBuild()

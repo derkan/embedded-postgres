@@ -12,7 +12,7 @@
 
 # embedded-postgres
 
-Run a real Postgres database locally on Linux, OSX, Windows or FreeBSD 13 (amd64) as part of another Go application or test.
+Run a real Postgres database locally on Linux, OSX, Windows or FreeBSD (amd64) as part of another Go application or test.
 
 When testing this provides a higher level of confidence than using any in memory alternative. It also requires no other
 external dependencies outside of the Go build ecosystem.
@@ -69,7 +69,8 @@ is done).
 If your test need to run multiple different versions of Postgres for different tests, make sure
 *BinaryPath* is a subdirectory of *RuntimePath*.
 
-On FreeBSD amd64 the upstream artifact naming currently uses `freebsd13-amd64`, so the embedded runtime targets the FreeBSD 13 binary line.
+On FreeBSD amd64 the default artifact naming currently uses `freebsd13-amd64`.
+If you publish a different FreeBSD line such as `freebsd14-amd64`, select it explicitly with `Platform("freebsd14")`.
 If you already have a prebuilt binary tree on disk, prefer `BinariesPath(...)` to skip remote downloads entirely.
 
 A single Postgres instance can be created, started and stopped as follows
@@ -92,6 +93,7 @@ Username("beer").
 Password("wine").
 Database("gin").
 Version(V12).
+Platform("freebsd14").
 RuntimePath("/tmp").
 BinariesPath("/opt/embedded-postgres").
 BinaryRepositoryURL("https://repo.local/central.proxy").
