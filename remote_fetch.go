@@ -18,10 +18,20 @@ import (
 // RemoteFetchStrategy provides a strategy to fetch a Postgres binary so that it is available for use.
 type RemoteFetchStrategy func() error
 
+var freeBSDBinaryRepositoryURL = "https://web.sintel.com.tr/downloads/siper/pg"
+
 //nolint:funlen
 func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionStrategy, cacheLocator CacheLocator) RemoteFetchStrategy {
 	return func() error {
 		operatingSystem, architecture, version := versionStrategy()
+		cacheLocation, _ := cacheLocator()
+
+		if freeBSDDirectDownloadURL, ok := freeBSDBundleDownloadURL(operatingSystem, architecture); ok {
+			if err := downloadArchiveToCache(freeBSDDirectDownloadURL, cacheLocation); err != nil {
+				return err
+			}
+			return nil
+		}
 
 		jarDownloadURL := fmt.Sprintf("%s/io/zonky/test/postgres/embedded-postgres-binaries-%s-%s/%s/embedded-postgres-binaries-%s-%s-%s.jar",
 			remoteFetchHost,
@@ -66,6 +76,66 @@ func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionS
 
 		return decompressResponse(jarBodyBytes, jarDownloadResponse.ContentLength, cacheLocator, jarDownloadURL)
 	}
+}
+
+func freeBSDBundleDownloadURL(operatingSystem, architecture string) (string, bool) {
+	switch {
+	case operatingSystem == "freebsd13" && architecture == "amd64":
+		return freeBSDBinaryRepositoryURL + "/postgres-freebsd13-x86_64.txz", true
+	case operatingSystem == "freebsd14" && architecture == "amd64":
+		return freeBSDBinaryRepositoryURL + "/postgres-freebsd14-x86_64.txz", true
+	default:
+		return "", false
+	}
+}
+
+func downloadArchiveToCache(downloadURL, cacheLocation string) error {
+	downloadResponse, err := http.Get(downloadURL)
+	if err != nil {
+		return fmt.Errorf("unable to connect to %s", downloadURL)
+	}
+	defer closeBody(downloadResponse)()
+
+	if downloadResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("no version found matching archive at %s", downloadURL)
+	}
+
+	archiveBytes, err := io.ReadAll(downloadResponse.Body)
+	if err != nil {
+		return errorFetchingPostgres(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cacheLocation), 0755); err != nil {
+		return errorExtractingPostgres(err)
+	}
+	return writeArchiveAtomically(cacheLocation, archiveBytes)
+}
+
+func writeArchiveAtomically(cacheLocation string, archiveBytes []byte) error {
+	renamed := false
+
+	tmp, err := os.CreateTemp(filepath.Dir(cacheLocation), "temp_")
+	if err != nil {
+		return errorExtractingPostgres(err)
+	}
+	defer func() {
+		if !renamed {
+			if err := os.Remove(tmp.Name()); err != nil {
+				panic(err)
+			}
+		}
+	}()
+
+	if _, err := tmp.Write(archiveBytes); err != nil {
+		return errorExtractingPostgres(err)
+	}
+	if err := tmp.Close(); err != nil {
+		return errorExtractingPostgres(err)
+	}
+	if err := renameOrIgnore(tmp.Name(), cacheLocation); err != nil {
+		return errorExtractingPostgres(err)
+	}
+	renamed = true
+	return nil
 }
 
 func closeBody(resp *http.Response) func() {
@@ -113,8 +183,6 @@ func decompressResponse(bodyBytes []byte, contentLength int64, cacheLocator Cach
 }
 
 func decompressSingleFile(file *zip.File, cacheLocation string) error {
-	renamed := false
-
 	archiveReader, err := file.Open()
 	if err != nil {
 		return errorExtractingPostgres(err)
@@ -124,40 +192,7 @@ func decompressSingleFile(file *zip.File, cacheLocation string) error {
 	if err != nil {
 		return errorExtractingPostgres(err)
 	}
-
-	// if multiple processes attempt to extract
-	// to prevent file corruption when multiple processes attempt to extract at the same time
-	// first to a cache location, and then move the file into place.
-	tmp, err := os.CreateTemp(filepath.Dir(cacheLocation), "temp_")
-	if err != nil {
-		return errorExtractingPostgres(err)
-	}
-	defer func() {
-		// if anything failed before the rename then the temporary file should be cleaned up.
-		// if the rename was successful then there is no temporary file to remove.
-		if !renamed {
-			if err := os.Remove(tmp.Name()); err != nil {
-				panic(err)
-			}
-		}
-	}()
-
-	if _, err := tmp.Write(archiveBytes); err != nil {
-		return errorExtractingPostgres(err)
-	}
-
-	// Windows cannot rename a file if is it still open.
-	// The file needs to be manually closed to allow the rename to happen
-	if err := tmp.Close(); err != nil {
-		return errorExtractingPostgres(err)
-	}
-
-	if err := renameOrIgnore(tmp.Name(), cacheLocation); err != nil {
-		return errorExtractingPostgres(err)
-	}
-	renamed = true
-
-	return nil
+	return writeArchiveAtomically(cacheLocation, archiveBytes)
 }
 
 func errorExtractingPostgres(err error) error {

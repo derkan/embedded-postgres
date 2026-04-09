@@ -46,7 +46,7 @@ func Test_defaultRemoteFetchStrategy_UsesConfiguredPlatformOverride(t *testing.T
 	requests := make([]string, 0, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests = append(requests, r.RequestURI)
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
@@ -62,16 +62,58 @@ func Test_defaultRemoteFetchStrategy_UsesConfiguredPlatformOverride(t *testing.T
 		},
 	)
 
-	remoteFetchStrategy := defaultRemoteFetchStrategy(server.URL+"/maven2", versionStrategy, testCacheLocator())
+	originalURL := freeBSDBinaryRepositoryURL
+	freeBSDBinaryRepositoryURL = server.URL
+	defer func() {
+		freeBSDBinaryRepositoryURL = originalURL
+	}()
+
+	cacheDir := t.TempDir()
+	remoteFetchStrategy := defaultRemoteFetchStrategy(server.URL+"/maven2", versionStrategy, func() (string, bool) {
+		return filepath.Join(cacheDir, "freebsd14.txz"), false
+	})
 
 	err := remoteFetchStrategy()
 
-	require.EqualError(t, err, "no version found matching 18.3.0")
+	require.NoError(t, err)
 	require.NotEmpty(t, requests)
-	assert.Equal(t,
-		"/maven2/io/zonky/test/postgres/embedded-postgres-binaries-freebsd14-amd64/18.3.0/embedded-postgres-binaries-freebsd14-amd64-18.3.0.jar",
-		requests[0],
+	assert.Equal(t, "/postgres-freebsd14-x86_64.txz", requests[0])
+}
+
+func Test_defaultRemoteFetchStrategy_UsesDefaultFreeBSD13Bundle(t *testing.T) {
+	requests := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.RequestURI)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	versionStrategy := defaultVersionStrategy(
+		DefaultConfig().Version(PostgresVersion("18.3.0")),
+		"freebsd",
+		"amd64",
+		linuxMachineName,
+		func() bool {
+			return false
+		},
 	)
+
+	originalURL := freeBSDBinaryRepositoryURL
+	freeBSDBinaryRepositoryURL = server.URL
+	defer func() {
+		freeBSDBinaryRepositoryURL = originalURL
+	}()
+
+	cacheDir := t.TempDir()
+	remoteFetchStrategy := defaultRemoteFetchStrategy(server.URL+"/maven2", versionStrategy, func() (string, bool) {
+		return filepath.Join(cacheDir, "freebsd13.txz"), false
+	})
+
+	err := remoteFetchStrategy()
+
+	require.NoError(t, err)
+	require.NotEmpty(t, requests)
+	assert.Equal(t, "/postgres-freebsd13-x86_64.txz", requests[0])
 }
 
 func Test_defaultRemoteFetchStrategy_ErrorWhenBodyReadIssue(t *testing.T) {
