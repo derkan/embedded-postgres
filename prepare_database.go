@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/lib/pq"
 )
@@ -56,7 +57,11 @@ func defaultInitDatabase(binaryExtractLocation, runtimePath, pgDataDir, username
 		if readLogsErr != nil {
 			logContent = []byte(string(logContent) + " - " + readLogsErr.Error())
 		}
-		return fmt.Errorf("unable to init database using '%s': %w\n%s", postgresInitDBProcess.String(), err, string(logContent))
+		logText := string(logContent)
+		if runtime.GOOS == "freebsd" && needsFreeBSDICUCopyHint(logText) {
+			logText += freeBSDICUCopyHint(binaryExtractLocation)
+		}
+		return fmt.Errorf("unable to init database using '%s': %w\n%s", postgresInitDBProcess.String(), err, logText)
 	}
 
 	if err = os.Remove(passwordFile); err != nil {

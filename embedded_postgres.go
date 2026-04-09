@@ -244,11 +244,36 @@ func startPostgres(ep *EmbeddedPostgres) error {
 	if err := postgresProcess.Run(); err != nil {
 		_ = ep.syncedLogger.flush()
 		logContent, _ := readLogsOrTimeout(ep.syncedLogger.file)
+		logText := string(logContent)
 
-		return fmt.Errorf("could not start postgres using %s:\n%s", postgresProcess.String(), string(logContent))
+		if runtime.GOOS == "freebsd" && needsFreeBSDICUCopyHint(logText) {
+			logText += freeBSDICUCopyHint(ep.config.binariesPath)
+		}
+
+		return fmt.Errorf("could not start postgres using %s:\n%s", postgresProcess.String(), logText)
 	}
 
 	return nil
+}
+
+func needsFreeBSDICUCopyHint(logText string) bool {
+	return strings.Contains(logText, `U_FILE_ACCESS_ERROR`) ||
+		strings.Contains(logText, `could not open collator for locale "und"`) ||
+		strings.Contains(logText, `pg_collation_actual_version(oid)`) ||
+		strings.Contains(logText, `icu`)
+}
+
+func freeBSDICUCopyHint(binariesPath string) string {
+	icuRoot := filepath.Join(binariesPath, "share", "icu")
+	return fmt.Sprintf(
+		"\nFreeBSD ICU hint:\n"+
+			"  The embedded bundle ships ICU data under %s\n"+
+			"  If PostgreSQL still fails to load collations, copy the bundled ICU version directory into /usr/local/share/icu/.\n"+
+			"  Example:\n"+
+			"    cp -R %s/* /usr/local/share/icu/\n",
+		icuRoot,
+		icuRoot,
+	)
 }
 
 func stopPostgres(ep *EmbeddedPostgres) error {
