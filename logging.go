@@ -15,6 +15,11 @@ type syncedLogger struct {
 }
 
 func newSyncedLogger(dir string, logger io.Writer) (*syncedLogger, error) {
+	if dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, err
+		}
+	}
 	file, err := os.CreateTemp(dir, "embedded_postgres_log")
 	if err != nil {
 		return nil, err

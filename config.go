@@ -15,6 +15,7 @@ type Config struct {
 	port                uint32
 	useUnixSocket       bool
 	unixSocketDirectory string
+	logDirectory        string
 	database            string
 	username            string
 	password            string
@@ -81,6 +82,13 @@ func (c Config) WithoutTcp() Config {
 // WithUnixSocketDirectory sets the directory where Postgres creates its UNIX socket.
 func (c Config) WithUnixSocketDirectory(dir string) Config {
 	c.unixSocketDirectory = dir
+	return c
+}
+
+// LogDirectory sets the directory where the temporary embedded Postgres capture
+// file is created before its content is forwarded to the configured logger.
+func (c Config) LogDirectory(dir string) Config {
+	c.logDirectory = dir
 	return c
 }
 
