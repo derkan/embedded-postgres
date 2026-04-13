@@ -102,6 +102,15 @@ func (ep *EmbeddedPostgres) Start() error {
 		ep.config.binariesPath = ep.config.runtimePath
 	}
 
+	ep.logf(
+		"embedded postgres binary setup cache=%s cache_exists=%t runtime_path=%s binaries_path=%s data_path=%s",
+		cacheLocation,
+		cacheExists,
+		ep.config.runtimePath,
+		ep.config.binariesPath,
+		ep.config.dataPath,
+	)
+
 	if err := ep.downloadAndExtractBinary(cacheExists, cacheLocation); err != nil {
 		return err
 	}
@@ -159,19 +168,34 @@ func (ep *EmbeddedPostgres) downloadAndExtractBinary(cacheExists bool, cacheLoca
 	mu.Lock()
 	defer mu.Unlock()
 
-	_, binDirErr := os.Stat(filepath.Join(ep.config.binariesPath, "bin", "pg_ctl"))
+	pgCtlPath := filepath.Join(ep.config.binariesPath, "bin", "pg_ctl")
+	_, binDirErr := os.Stat(pgCtlPath)
 	if os.IsNotExist(binDirErr) {
 		if !cacheExists {
-			if err := ep.remoteFetchStrategy(); err != nil {
+			ep.logf("downloading embedded postgres archive cache=%s", cacheLocation)
+			if err := ep.remoteFetchStrategy(ep.logf); err != nil {
 				return err
 			}
+		} else {
+			ep.logf("using cached embedded postgres archive cache=%s", cacheLocation)
 		}
 
-		if err := decompressTarXz(defaultTarReader, cacheLocation, ep.config.binariesPath); err != nil {
+		ep.logf("extracting embedded postgres archive archive=%s destination=%s", cacheLocation, ep.config.binariesPath)
+		if err := decompressTarXz(defaultTarReader, cacheLocation, ep.config.binariesPath, ep.logf); err != nil {
 			return err
 		}
+		ep.logf("embedded postgres archive extracted archive=%s destination=%s", cacheLocation, ep.config.binariesPath)
+	} else {
+		ep.logf("embedded postgres binaries already available pg_ctl=%s", pgCtlPath)
 	}
 	return nil
+}
+
+func (ep *EmbeddedPostgres) logf(format string, args ...any) {
+	if ep == nil || ep.syncedLogger == nil {
+		return
+	}
+	ep.syncedLogger.logf(format, args...)
 }
 
 func (ep *EmbeddedPostgres) GetConnectionURL() string {

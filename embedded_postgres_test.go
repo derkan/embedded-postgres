@@ -65,11 +65,11 @@ func Test_ErrorWhenPortAlreadyTaken(t *testing.T) {
 }
 
 func Test_ErrorWhenRemoteFetchError(t *testing.T) {
-	database := NewDatabase()
+	database := NewDatabase(DefaultConfig().Port(9875))
 	database.cacheLocator = func() (string, bool) {
 		return "", false
 	}
-	database.remoteFetchStrategy = func() error {
+	database.remoteFetchStrategy = func(progressLogger) error {
 		return errors.New("did not work")
 	}
 
@@ -328,7 +328,7 @@ func Test_CustomLog(t *testing.T) {
 	assert.Contains(t, lines, fmt.Sprintf("The files belonging to this database system will be owned by user \"%s\".", current.Username))
 	assert.Contains(t, lines, "syncing data to disk ... ok")
 	assert.Contains(t, lines, "server stopped")
-	assert.Less(t, len(lines), 55)
+	assert.Less(t, len(lines), 70)
 	assert.Greater(t, len(lines), 40)
 }
 
@@ -767,12 +767,12 @@ func Test_PrefetchedBinaries(t *testing.T) {
 		RuntimePath(runtimeTempDir))
 
 	// Download and unarchive postgres into the bindir.
-	if err := database.remoteFetchStrategy(); err != nil {
+	if err := database.remoteFetchStrategy(nil); err != nil {
 		panic(err)
 	}
 
 	cacheLocation, _ := database.cacheLocator()
-	if err := decompressTarXz(defaultTarReader, cacheLocation, binTempDir); err != nil {
+	if err := decompressTarXz(defaultTarReader, cacheLocation, binTempDir, nil); err != nil {
 		panic(err)
 	}
 
@@ -780,7 +780,7 @@ func Test_PrefetchedBinaries(t *testing.T) {
 	database.cacheLocator = func() (string, bool) {
 		return "", false
 	}
-	database.remoteFetchStrategy = func() error {
+	database.remoteFetchStrategy = func(progressLogger) error {
 		return errors.New("did not work")
 	}
 

@@ -16,18 +16,19 @@ import (
 )
 
 // RemoteFetchStrategy provides a strategy to fetch a Postgres binary so that it is available for use.
-type RemoteFetchStrategy func() error
+type RemoteFetchStrategy func(progressLogger) error
 
 var freeBSDBinaryRepositoryURL = "https://web.sintel.com.tr/downloads/siper/pg"
 
 //nolint:funlen
 func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionStrategy, cacheLocator CacheLocator) RemoteFetchStrategy {
-	return func() error {
+	return func(logf progressLogger) error {
 		operatingSystem, architecture, version := versionStrategy()
 		cacheLocation, _ := cacheLocator()
 
 		if freeBSDDirectDownloadURL, ok := freeBSDBundleDownloadURL(operatingSystem, architecture); ok {
-			if err := downloadArchiveToCache(freeBSDDirectDownloadURL, cacheLocation); err != nil {
+			logProgress(logf, "downloading embedded postgres archive url=%s cache=%s", freeBSDDirectDownloadURL, cacheLocation)
+			if err := downloadArchiveToCache(freeBSDDirectDownloadURL, cacheLocation, logf); err != nil {
 				return err
 			}
 			return nil
@@ -41,6 +42,7 @@ func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionS
 			operatingSystem,
 			architecture,
 			version)
+		logProgress(logf, "downloading embedded postgres bundle url=%s cache=%s", jarDownloadURL, cacheLocation)
 
 		jarDownloadResponse, err := http.Get(jarDownloadURL)
 		if err != nil {
@@ -74,7 +76,7 @@ func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionS
 			}
 		}
 
-		return decompressResponse(jarBodyBytes, jarDownloadResponse.ContentLength, cacheLocator, jarDownloadURL)
+		return decompressResponse(jarBodyBytes, jarDownloadResponse.ContentLength, cacheLocator, jarDownloadURL, logf)
 	}
 }
 
@@ -89,7 +91,7 @@ func freeBSDBundleDownloadURL(operatingSystem, architecture string) (string, boo
 	}
 }
 
-func downloadArchiveToCache(downloadURL, cacheLocation string) error {
+func downloadArchiveToCache(downloadURL, cacheLocation string, logf progressLogger) error {
 	downloadResponse, err := http.Get(downloadURL)
 	if err != nil {
 		return fmt.Errorf("unable to connect to %s", downloadURL)
@@ -107,6 +109,7 @@ func downloadArchiveToCache(downloadURL, cacheLocation string) error {
 	if err := os.MkdirAll(filepath.Dir(cacheLocation), 0755); err != nil {
 		return errorExtractingPostgres(err)
 	}
+	logProgress(logf, "downloaded embedded postgres archive url=%s cache=%s bytes=%d", downloadURL, cacheLocation, len(archiveBytes))
 	return writeArchiveAtomically(cacheLocation, archiveBytes)
 }
 
@@ -149,7 +152,7 @@ func closeBody(resp *http.Response) func() {
 	}
 }
 
-func decompressResponse(bodyBytes []byte, contentLength int64, cacheLocator CacheLocator, downloadURL string) error {
+func decompressResponse(bodyBytes []byte, contentLength int64, cacheLocator CacheLocator, downloadURL string, logf progressLogger) error {
 	size := contentLength
 	// if the content length is not set (i.e. chunked encoding),
 	// we need to use the length of the bodyBytes otherwise
@@ -170,6 +173,7 @@ func decompressResponse(bodyBytes []byte, contentLength int64, cacheLocator Cach
 
 	for _, file := range zipReader.File {
 		if !file.FileHeader.FileInfo().IsDir() && strings.HasSuffix(file.FileHeader.Name, ".txz") {
+			logProgress(logf, "writing embedded postgres archive from bundle url=%s entry=%s cache=%s", downloadURL, file.FileHeader.Name, cacheLocation)
 			if err := decompressSingleFile(file, cacheLocation); err != nil {
 				return err
 			}
